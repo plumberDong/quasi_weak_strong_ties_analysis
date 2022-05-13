@@ -1,0 +1,94 @@
+---
+title: "汇总数据"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(showtext)
+font_families()
+font_add("st", "simsun.ttc")
+```
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(scales)
+showtext_auto()
+
+f <- "fs"
+
+# 最终结果
+data1 <- read_csv("sample_10.csv", col_names = c("mod", "a", "p", "Time")) 
+data2 <- read_csv("sample_20.csv", col_names = c("mod", "a", "p", "Time"))
+data3 <- read_csv("sample_70.csv", col_names = c("mod", "a", "p", "Time"))
+data <- rbind(data1, data2, data3) %>%
+  filter(!(a %in% c(2,3) & p > 0.15 & mod == 1)) %>%
+  #filter(Time != 99999) %>%
+  group_by(p, mod, a) %>%
+  summarise(Mean = mean(Time)) %>%
+  mutate(mod = case_when(mod == 1 ~ "1都是弱关系",
+                       mod == 2 ~ "2存在强关系",
+                       mod == 3 ~ "3存在似弱强关系")) %>%
+  mutate(a = case_when(a == 1 ~ "阈值=1",
+                       a == 2 ~ "阈值=2",
+                       a == 3 ~ "阈值=3"))
+
+p1 <- data %>%
+  ggplot(aes(x = p, y = Mean, linetype = factor(mod))) + 
+  geom_line() + 
+  facet_wrap(~a) + 
+  scale_x_log10(breaks = 10^(-3:0), labels = trans_format("log10", math_format(10^.x))) + 
+  labs(x = "改写比例p", y = "时刻数") + 
+  theme_classic() + 
+  theme(strip.text = element_text(face = "bold", size = rel(1.6), family = "st"),
+        axis.title = element_text(face = "bold", size = rel(1.5), family = "st"),
+        axis.text.x = element_text(size = rel(1.6)),
+        axis.text.y = element_text(size = rel(1.6)),
+        legend.text = element_text(size = rel(1.5), family = "st"),
+        legend.position = "top",
+        strip.background = element_rect(color = "grey")) + 
+  annotation_logticks(side = "b", alpha = .6, size = .3) + 
+  guides(linetype = guide_legend(title = NULL))
+
+ggsave("图3.png", p1, height = 6, width = 10)
+```
+
+```{r}
+p2 <- data %>%
+  spread(key = mod, Mean) %>%
+  mutate(increase = (`2存在强关系` - `3存在似弱强关系`) / `2存在强关系`   ) %>%
+
+  ggplot(aes(x = p, y = increase)) + 
+    geom_line() + 
+    facet_wrap(~a) + 
+  scale_x_log10(breaks = 10^(-3:0), labels = trans_format("log10", math_format(10^.x))) + 
+  labs(x = "改写比例p", y = "模式3比模式2快%") + 
+  theme_classic() + 
+  theme(strip.text = element_text(face = "bold", size = rel(1.6),  family = "st"),
+        axis.title = element_text(face = "bold", size = rel(1.5), family = "st"),
+        axis.text.x = element_text(size = rel(1.6), family = "st"),
+        axis.text.y = element_text(size = rel(1.6), family = "st"),
+        legend.text = element_text(size = rel(1.5), family = "st")) + 
+  annotation_logticks(side = "b", alpha = .6)
+
+ggsave("图A1.png", p2, height = 6, width = 10)
+```
+
+```{r}
+data2 <- data %>%
+  spread(key = mod, Mean) %>%
+  mutate(increase = (`2存在强关系` - `3存在似弱强关系`) / `2存在强关系`   )
+
+data2 %>%
+  group_by(a) %>%
+  summarise(M = max(increase))
+```
+
+
+
+

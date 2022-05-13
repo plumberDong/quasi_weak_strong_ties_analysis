@@ -1,0 +1,426 @@
+---
+title: "Evidence of Quasi-weak Strong Tie"
+output: 
+  html_document: 
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, haven, ggplot2)
+```
+
+# 1. import data
+
+使用的是CGSS2003年调查数据，涉及讨论网。 
+
+```{r message=FALSE, warning=FALSE}
+# 读取数据
+cgss2003 <- read_dta("cgss2003_14.dta",
+                     col_select = c(starts_with("dnfrq") # 互动频繁度
+                    ,starts_with("dnwho")  # 关系类型
+                    ,starts_with("acqu0"),# 相熟程度
+                    sex, birth, hktype # 性别、出生年、户口情况
+                    ) 
+                     ) 
+```
+
+```{r}
+# 把数据框拉长，一个关系人是一行
+
+# 频繁度
+fre <- cgss2003 %>%
+  select(starts_with("dnfrq")) %>%
+  pivot_longer(cols = 1:5) %>%
+  pull(value)
+# 关系类型
+who <- cgss2003 %>%
+  select(starts_with("dnwho")) %>%
+  pivot_longer(cols = 1:5) %>%
+  pull(value)
+# 熟悉程度
+shu <- cgss2003 %>%
+  select(starts_with("acqu")) %>%
+  pivot_longer(cols = 1:5) %>%
+  pull(value)
+# 把三个数据合并起来
+n <- length(shu)     # 有多少个关系人n
+N <- nrow(cgss2003)  # 有多少个ego
+
+d <- tibble(ego = rep(1:N, each = 5)    # ego的标示ego
+            ,id = rep(1:5, times = N)  # 关系人的标示id
+            ,sex = rep(as.vector(cgss2003$sex), each = 5)
+            ,birth = rep(as.vector(cgss2003$birth), each = 5)
+            ,hktype = rep(as.vector(cgss2003$hktype), each = 5)
+            ,fre = fre
+            ,type = who
+            ,shu = shu)
+
+d
+```
+
+此时的ego个数
+```{r}
+N
+```
+
+# 2.数据的清理与编码
+
+## 2.1清理掉那些代表不适合/无填答的编码，然后人口学特征重新生成一下
+
+```{r}
+d <- d %>%
+  filter((fre %in% 1:4) & (type %in% 1:6) & (shu %in% 1:4) & (hktype %in% 1:8))
+
+# 看一下清理过后还剩多少个ego
+d %>%
+  distinct(ego) %>%
+  nrow()
+```
+
+```{r}
+# 调整一下性别、年龄和户口变量
+d <- d %>%
+  mutate(rural = ifelse(hktype == 3, 1, 0), #农业户口为1
+         age = 2003 - birth,
+         male = ifelse(sex==1, 1, 0)) # 男性为1
+```
+
+
+```{r}
+# 看一下不同ego所剩多少关系人
+temp <- d %>%
+  group_by(ego) %>%
+  count()
+k <- table(temp$n)
+
+sum(as.numeric(names(k)) * k)
+```
+
+```{r}
+# 看一下
+sum(k)
+```
+
+
+```{r}
+# 表A-1讨论网规模的分布情况(table A-1)
+(table(temp$n))
+(prop.table(table(temp$n)) * 100) %>% round(0)
+```
+
+```{r}
+# 人口学特征
+demo <- d %>%
+  distinct(ego, rural, male, age)
+
+demo %>%
+  select(-ego) %>%
+  pivot_longer(1:3) %>%
+  group_by(name) %>%
+  summarise(Mean = round(mean(value), 2), Sd = round(sd(value),2), N=n())
+```
+
+```{r}
+# 男性数量
+table(demo$male)
+
+# 城市户口
+table(demo$rural)
+```
+
+
+## 2.2 将fre, type和shu重新编码
+
+交往频繁度(fre)的编码情况为：  
+
+- 1:经常
+- 2:有时
+- 3:很少
+- 4:没有过
+
+```{r}
+Count <- (fre_table <- table(d$fre))  # 频数
+Percentage <- (prop.table(fre_table) * 100) %>% round(0) # 百分比
+rbind(Count, Percentage)
+```
+
+关系类型(type)的编码情况为：  
+
+- 1:家庭成员
+- 2:亲属
+- 3:朋友
+- 4:同事
+- 5:邻居
+- 6:其他
+
+```{r}
+Count <- (fre_table <- table(d$type))  # 频数
+Percentage <- (prop.table(fre_table) * 100) %>% round(0) # 百分比
+rbind(Count, Percentage)
+```
+
+熟悉程度(type)的编码情况为：
+
+- 1: 不认识
+- 2: 不太熟悉
+- 3: 比较熟
+- 4: 非常熟
+
+```{r}
+Count <- (fre_table <- table(d$shu))  # 频数
+Percentage <- (prop.table(fre_table) * 100) %>% round(0) # 百分比
+rbind(Count, Percentage)
+```
+
+综上，我们分别重新编码如下： 
+
+- fre：
+  1. 频繁（1）
+  2. 不频繁（2、3、4）
+- type：
+  1. 合并5-6类别，成5
+- shu:
+  1. 深（4）
+  2. 浅（1、2、3）
+  
+```{r}
+# 按上述重新编码 加后缀2
+d1 <- d %>%
+  mutate(fre2 = ifelse(fre == 1, "频繁", "不频繁"),
+         shu2 = ifelse(shu == 4, "深", "浅"),
+         type2 = case_when(type==1 ~ "家人",
+                          type==2 ~ "亲属",
+                          type==3 ~ "朋友",
+                          type==4 ~ "同事",
+                          type %in% 5:6 ~ "邻居或其他")) %>%
+  mutate(fre2 = factor(fre2, levels = c("频繁", "不频繁")),
+         shu2 = factor(shu2, levels = c("深", "浅")),
+         type2 = factor(type2, levels = c("家人", "亲属", "朋友", "同事", "邻居或其他")))
+```
+
+
+```{r}
+# 重新编码后的分布情况
+Count <- table(d1$fre2)
+Prop <- (prop.table(Count) * 100) %>% round(0)
+rbind(Count, Prop)
+```
+```{r}
+Count <- table(d1$shu2)
+Prop <- (prop.table(Count) * 100) %>% round(0)
+rbind(Count, Prop)
+```
+
+```{r}
+Count <- table(d1$type2)
+Prop <- (prop.table(Count) * 100) %>% round(0)
+rbind(Count, Prop)
+```
+
+
+
+# 3 统计结果
+
+## 3.1 表1及表A.2
+
+```{r}
+# 时间投入和关系深度的关系
+# 也就是互动频繁程度和熟悉程度的关系
+# tab1 
+(tab1 <- table(d1$shu2, d1$fre2))
+```
+
+```{r}
+# tab1
+(prop.table(tab1) * 100) %>% round(0)
+```
+
+```{r}
+597 + 3970
+4567 / sum(tab1)
+```
+
+```{r}
+# 卡方检验
+chisq.test(tab1)
+```
+
+```{r}
+# 表A.2 没有合并的情况
+tab_a2 <- table(d1$shu, d1$fre)
+tab_a2
+```
+```{r}
+(prop.table(tab_a2) * 100) %>% round(0)
+```
+```{r}
+(sum(tab_a2) - (12504 + 424 + 19)) / sum(tab_a2)
+```
+```{r}
+chisq.test(tab_a2)
+```
+
+
+
+## 3.2 图1：不同关系属性和互动频繁程度之下的深关系比例
+
+
+```{r}
+# 不同关系属性和互动频繁程度之下的深关系比例
+fig1_data <- d1 %>%
+  mutate(is_shen = 2- as.numeric(shu2)) %>%
+  group_by(type2, fre2) %>%
+  summarise(N = n(),
+            N_is_shen = sum(is_shen == 1),
+            prop_is_shen = N_is_shen  * 100 / N)
+```
+
+```{r}
+# 计算置信区间
+library(binom)
+
+# 最传统的Wald interval
+confi_interval <- binom.confint(x = fig1_data$N_is_shen, 
+                                n = fig1_data$N, tol = 1e-8, conf.level = .99, 
+                                method = "asymptotic") %>%
+  select(mean:upper)
+```
+
+
+```{r}
+# 合并
+fig1_barplot <- fig1_data %>%
+  bind_cols(confi_interval) %>%
+  mutate(across(mean:upper, ~.*100))
+```
+
+
+```{r}
+library(showtext)
+showtext_auto()
+# font_files()
+font_add("st", "simsun.ttc")
+#font_families()
+
+# 绘图
+p1 <- fig1_barplot%>%
+  ggplot() + 
+  geom_point(aes(x = type2, y = 100 - mean, group = fre2)) + 
+  geom_line(aes(x = as.numeric(type2), y = 100 - mean, linetype = fre2)) + 
+  geom_errorbar(aes(x = type2, ymax = 100 - upper, ymin = 100 - lower), 
+                width = .1) + 
+  labs(x = NULL, y ="浅深度连带的占比(%)") +
+    theme_classic() + 
+    theme(legend.position=c(.2,.8),
+          legend.title = element_blank(),
+          axis.text.x = element_text(size = rel(3.2), family = "st"),
+          axis.text.y = element_text(size = rel(3.1), family = "st"),
+          axis.title = element_text(size = rel(3.1), family = "st"),
+          legend.text = element_text(size = rel(3.1), family = "st"))
+
+
+ggsave("图1.png",p1, width = 7, height = 4.5)
+
+```
+
+
+# 统计模型
+
+```{r}
+data_for_model <- d1 %>%
+  select(ego, male, age, rural, shu2, type2, fre2) %>%
+  mutate(across(ends_with("2"), as.character)) %>%
+  mutate(no_deep = ifelse(shu2 == "浅", 1, 0),  # 是否浅
+         no_fre = ifelse(fre2 == "不频繁", 1, 0), # 是否频繁
+         jr = ifelse(type2 == "家人", 1, 0),
+         qs = ifelse(type2 == "亲属", 1, 0),
+         py = ifelse(type2 == "朋友", 1, 0),
+         ts = ifelse(type2 == "同事", 1, 0)) %>%
+  select(ego, male, age, rural, no_deep, no_fre, jr, qs, py, ts)
+```
+
+```{r}
+data_for_model <- data_for_model %>%
+  mutate(jr2 = no_fre * jr,
+         qs2 = no_fre * qs,
+         py2 = no_fre * qs,
+         py2 = no_fre * py,
+         ts2 = no_fre * ts)
+```
+
+
+```{r}
+# 分层的
+library(lme4)
+#library(equatiomatic)
+# pacman::p_load(equatiomatic)
+
+
+M1 <- lmer(no_deep ~ jr + qs + py + ts + (1|ego), data = data_for_model)
+M2 <- lmer(no_deep ~ male + age + rural + no_fre + jr + qs + py + ts +  (1|ego),
+     data = data_for_model)
+M3 <- lmer(no_deep ~ male + age + rural + no_fre + jr + qs + py + ts + jr2 + qs2 + py2 + ts2 + (1|ego),
+     data = data_for_model)
+
+#extract_eq(M3)
+
+summary(M3)
+
+result <- M3 %>%
+  broom::tidy() %>%
+  mutate(across(is.numeric, ~round(., 3)))
+```
+
+
+```{r}
+# 系数的协方差矩阵
+cor_matrix <- vcov(M3) %>% as.matrix()
+```
+
+```{r}
+# 比较不同系数大小的函数
+compare <- function(v1 = "jr2", v2 = "qs2"){
+  # 先计算各自的std
+  v1_var <- result %>% filter(term == v1) %>% pull(std.error)
+  v1_est <- result %>% filter(term == v1) %>% pull(estimate)
+  v1_var <- v1_var^2
+  v2_var <- result %>% filter(term == v2) %>% pull(std.error)
+  v2_est <- result %>% filter(term == v2) %>% pull(estimate)
+  v2_var <- v2_var^2
+  # 计算协方差
+  Cov <- cor_matrix[v1, v2]
+  # 计算差值的标准差
+  minus_sd <- sqrt(v1_var + v2_var - 2 * Cov)
+  # 计算检验统计量
+  t <- (v1_est - v2_est) / minus_sd
+  pvalue <- pnorm(t) * 2
+  cat(v1_est - v2_est, t, pvalue, '\n')
+}
+```
+
+
+```{r}
+t <- compare("jr2", "qs2")
+t <- compare("qs2", "py2")
+t <- compare("py2", "ts2")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
