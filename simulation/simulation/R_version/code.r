@@ -45,8 +45,8 @@ NS <- R6Class(
                            dim_size = num_nodes,  # 节点数量
                            order = z / 2,
                            p_rewire = 0) %>%
-        # rewire 的同时不改变
-        rewire( keeping_degseq(niter = as.integer(ecount(.) * p_rewire)) ) %>%
+        # rewire 的同时不改变节点度
+        rewire( keeping_degseq(niter = as.integer(ecount(.) * 0.5 * p_rewire)) ) %>%
         as_tbl_graph()
       focal_node <- sample(1:num_nodes, 1) ## 一开始激活一些节点： 随机选择一个节点
       initial_activate <- neighborhood(g, nodes = focal_node)[[1]] # 提取该节点邻节点

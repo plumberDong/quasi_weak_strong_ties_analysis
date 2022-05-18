@@ -20,7 +20,6 @@ library(ggplot2)
 library(scales)
 showtext_auto()
 
-f <- "fs"
 
 # 最终结果
 data1 <- read_csv("sample_10.csv", col_names = c("mod", "a", "p", "Time")) 
@@ -29,6 +28,7 @@ data3 <- read_csv("sample_70.csv", col_names = c("mod", "a", "p", "Time"))
 data <- rbind(data1, data2, data3) %>%
   filter(!(a %in% c(2,3) & p > 0.15 & mod == 1)) %>%
   #filter(Time != 99999) %>%
+  mutate(p = 2 * p) %>% # 当时效应量写错了，放大了1倍
   group_by(p, mod, a) %>%
   summarise(Mean = mean(Time)) %>%
   mutate(mod = case_when(mod == 1 ~ "1都是弱关系",
@@ -56,6 +56,7 @@ p1 <- data %>%
   guides(linetype = guide_legend(title = NULL))
 
 ggsave("图3.png", p1, height = 6, width = 10)
+
 ```
 
 ```{r}

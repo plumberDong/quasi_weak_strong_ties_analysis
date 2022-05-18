@@ -7,15 +7,20 @@
     - code.Rmd : 对CGSS数据的分析
 - **simulation**
     - **data_analysis**
+      - R_data：在R中跑模拟的结果（p_rewire忘了乘0.5了，搞错了，数据不建议使用）
         - sample_10.csv: 10次循环[^1]
         - sample_20.csv: 20次循环
         - sample_70.csv: 70次循环
         - code.Rmd: 对模拟结果的分析
+      - Py_data: 在python中跑模拟的结果
+        - code.Rmd:分析
+        - sim_record.csv : 数据
     - **simulation**
         - **R_version**
           - code.r : 模拟程序(R版本)
         - **Py_version**
           - code.ipynb: 模拟程序(python版本)
+          - code_class.ipynb (面向对象)
 
 
 [^1]:这几个文件是在服务器和个人电脑分别运行的模拟结果，最后合并出100的样本，否则花费时间太长了。
